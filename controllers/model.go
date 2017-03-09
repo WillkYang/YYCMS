@@ -2,6 +2,7 @@ package controllers
 
 import (
 	m "YYCMS/models"
+
 	"github.com/agelinazf/egb"
 )
 
@@ -37,9 +38,10 @@ func (c *ModelController) Add() {
 	cateId := c.MustInt("cateId")
 	modeName := c.MustStr("title")
 	description := c.Str("description")
+	actions := c.Str("actions")
 	tableName := c.MustStr("tableName")
 
-	if err := m.CreateOneModel(cateId, modeName, description, tableName); err != nil {
+	if err := m.CreateOneModel(cateId, modeName, description, tableName, actions, true); err != nil {
 		c.AjaxMsg(nil, m.ErrCode[err.Error()], err.Error(), "")
 		return
 	}
@@ -101,4 +103,3 @@ func (c *ModelController) Sort() {
 	m.UpdateCache()
 	c.AjaxMsg(nil, m.NoError, "", "排序成功")
 }
-

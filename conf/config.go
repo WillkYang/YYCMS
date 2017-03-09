@@ -1,12 +1,12 @@
 package conf
 
 const (
-
 	AdminAuthCookieKey = "aep3HRwtagqczu79"
+	SuperAdminRoleId   = -1
 
 	TopCateId = 0
 
-	DefaultPageSize = 20
+	DefaultPageSize = 8
 
 	//CachePath 缓存文件地址
 	CachePath = "cache/"
@@ -19,14 +19,20 @@ const (
 
 	TranscodeVideoPath = "./upload/transcode/video/"
 
-	ModelConfigFilePath = "conf/models.config"
-
-	SuperAdminRoleId = -1
-
-	DefaultAdminPassword = "zaq1xsw2"
+	DefaultAdminPassword = "PTpGWn4E"
 
 	//图片上传路径
-	UploadImagePath = "./upload/uploadimg/"
+	UploadImagePath = "./upload/private/uploadimg/"
+	//公开图片保存路径
+	UploadPublicImagePath = "./upload/public/uploadimg/"
 	//缩略图路径
-	TransferImagePath = "./transfer/img/"
+	TransferThumbImagePath = "./transfer/img/thumb/"
+	TransferHtmlImagePath  = "./transfer/img/html/"
+	TransferImagePath      = "./transfer/img/"
+)
+
+//配置
+const (
+	ModelConfigFilePath = "conf/models.json"
+	AllActionsPath      = "conf/actions.json"
 )

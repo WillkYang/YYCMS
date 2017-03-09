@@ -1,9 +1,10 @@
 package controllers
 
 import (
-	"github.com/agelinazf/egb"
 	cnf "YYCMS/conf"
 	m "YYCMS/models"
+
+	"github.com/agelinazf/egb"
 )
 
 type PictureController struct {
@@ -29,21 +30,21 @@ func (c *PictureController) List() {
 	}
 
 	count := m.GetPicturesNum(cateId, keyword)
-	data := m.GetPictures(cateId, keyword, pagesize, (page - 1) * pagesize)
+	data := m.GetPictures(cateId, keyword, pagesize, (page-1)*pagesize)
 
 	c.Msg["keyword"] = keyword
 	c.Msg["count"] = count
 	c.Msg["lists"] = data
+	c.Msg["page"] = page
 	c.AjaxMsg(c.Msg, m.NoError, "", "")
 }
-
 
 //Profile 查看图片详情
 //@params	id
 //@return	Picture
-func (c *PictureController) Profile () {
+func (c *PictureController) Profile() {
 	id := c.MustInt("id")
-	if data,err := m.GetOnePictureById(id); err != nil {
+	if data, err := m.GetOnePictureById(id); err != nil {
 		c.AjaxMsg(nil, m.ErrCode[err.Error()], err.Error(), "")
 	} else {
 		c.AjaxMsg(data, m.NoError, "", "")
@@ -55,15 +56,18 @@ func (c *PictureController) Profile () {
 //@params	cateId modelId title description permission
 //@return	success/error
 func (c *PictureController) Add() {
-	//cateId := c.MustInt("cateId")
-	//title := c.MustStr("title")
-	//description := c.Str("description")
-	//
-	//if err := m.CreateOnePicture(cateId, title, description); err != nil {
-	//	c.AjaxMsg(nil, m.ErrCode[err.Error()], err.Error(), "")
-	//	return
-	//}
-	//c.AjaxMsg(nil, m.NoError, "", "添加成功")
+	cateId := c.MustInt("cateId")
+	title := c.MustStr("title")
+	description := c.Str("description")
+	downloadCount := c.Int("downloadCount")
+	publishTime := egb.TimeNowUnix()
+	path := c.MustStr("path")
+
+	if _, err := m.CreateOnePicture(cateId, downloadCount, title, publishTime, path, description); err != nil {
+		c.AjaxMsg(nil, m.ErrCode[err.Error()], err.Error(), "")
+		return
+	}
+	c.AjaxMsg(nil, m.NoError, "", "添加成功")
 }
 
 //UpdatePicture 更新图片
@@ -108,4 +112,3 @@ func (c *PictureController) Sort() {
 	}
 	c.AjaxMsg(nil, m.NoError, "", "排序成功")
 }
-

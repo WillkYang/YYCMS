@@ -1,9 +1,10 @@
 package controllers
 
 import (
-	"github.com/astaxie/beego"
 	cnf "YYCMS/conf"
 	m "YYCMS/models"
+	"YYCMS/utils/YYLog"
+
 	"github.com/agelinazf/egb"
 )
 
@@ -29,7 +30,7 @@ func (c *CarouselController) List() {
 	}
 
 	count := m.GetCarouselsNum(cateId, keyword)
-	data := m.GetCarousels(cateId, keyword, pagesize, (page - 1) * pagesize)
+	data := m.GetCarousels(cateId, keyword, pagesize, (page-1)*pagesize)
 
 	c.Msg["keyword"] = keyword
 	c.Msg["count"] = count
@@ -38,20 +39,18 @@ func (c *CarouselController) List() {
 	c.AjaxMsg(c.Msg, m.NoError, "", "")
 }
 
-
 //Profile 查看轮换图详情
 //@params	id
 //@return	Carousel
-func (c *CarouselController) Profile () {
+func (c *CarouselController) Profile() {
 	id := c.MustInt("id")
-	if data,err := m.GetOneCarouselById(id); err != nil {
+	if data, err := m.GetOneCarouselById(id); err != nil {
 		c.AjaxMsg(nil, m.ErrCode[err.Error()], err.Error(), "")
 	} else {
-		c.AjaxMsg(data, m.NoError, "", "")
+		c.Msg["data"] = data
+		c.AjaxMsg(c.Msg, m.NoError, "", "")
 	}
-
 }
-
 //AddCarousel 添加轮换图
 //@params	cateId modelId title description
 //@return	success/error
@@ -59,7 +58,7 @@ func (c *CarouselController) Add() {
 	cateId := c.MustInt("cateId")
 	title := c.Str("title")
 	description := c.Str("description")
-	url :=  c.Str("url")
+	url := c.Str("url")
 	path := c.MustStr("path")
 
 	if err := m.CreateOneCarousel(cateId, title, url, path, description); err != nil {
@@ -76,7 +75,7 @@ func (c *CarouselController) Update() {
 	id := c.MustInt("id")
 	cateId := c.MustInt("cateId")
 	title := c.Str("title")
-	url :=  c.Str("url")
+	url := c.Str("url")
 	description := c.Str("description")
 	path := c.Str("path")
 
@@ -104,7 +103,7 @@ func (c *CarouselController) Delete() {
 //@return	success/error
 func (c *CarouselController) Sort() {
 	postdata := c.Ctx.Request.PostForm
-	beego.Debug(postdata)
+	YYLog.Debug(postdata)
 	for k, v := range postdata {
 		id := egb.StringToInt(k)
 		if err := m.UpdateCarouselSort(id, egb.StringToInt(v[0])); err != nil {

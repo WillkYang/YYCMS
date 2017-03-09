@@ -1,15 +1,16 @@
 package controllers
 
 import (
-	"github.com/astaxie/beego"
+	"YYCMS/utils/YYLog"
 	"bytes"
-	"image/jpeg"
 	"encoding/base64"
-	"time"
-	"sync"
-	"github.com/hanguofeng/gocaptcha"
+	"image/jpeg"
 	"strings"
+	"sync"
+	"time"
+
 	"github.com/Unknwon/com"
+	"github.com/hanguofeng/gocaptcha"
 )
 
 type AuthCodeController struct {
@@ -21,32 +22,32 @@ var once sync.Once
 
 //获取验证码
 func (this *AuthCodeController) GetCaptcha() {
-	key,dist := makeCaptcha()
+	key, dist := makeCaptcha()
 	info := make(map[string]string, 0)
 	info["key"] = key
-	info["info"] = "data:image/png;base64," + strings.Replace(string(dist),"\u0000","",-1)
-	this.AjaxMsg(info,0,"","")
+	info["info"] = "data:image/png;base64," + strings.Replace(string(dist), "\u0000", "", -1)
+	this.AjaxMsg(info, 0, "", "")
 }
 
-func makeCaptcha() (string,[]byte) {
+func makeCaptcha() (string, []byte) {
 	createCaptcha()
 	key, err1 := captcha.GetKey(4)
 	if err1 != nil {
-		beego.Error(err1.Error())
+		YYLog.Error(err1.Error())
 	}
 	img, err := captcha.GetImage(key)
 	if err != nil {
-		beego.Error(err.Error())
+		YYLog.Error(err.Error())
 	}
 	emptyBuff := bytes.NewBuffer(nil)                  //开辟一个新的空buff
-	jpeg.Encode(emptyBuff, img, nil)                //img写入到buff
+	jpeg.Encode(emptyBuff, img, nil)                   //img写入到buff
 	dist := make([]byte, 10000)                        //开辟存储空间
 	base64.StdEncoding.Encode(dist, emptyBuff.Bytes()) //buff转成base64
 	//fmt.Println(string(dist))                          //输出图片base64(type = []byte)
-	return key,dist
+	return key, dist
 }
 
-func VerifyCaptcha(key, word string) (bool,string) {
+func VerifyCaptcha(key, word string) (bool, string) {
 	return captcha.Verify(key, word)
 }
 
@@ -56,31 +57,31 @@ func (this *AuthCodeController) VerifyCaptcha() {
 	word := this.MustStr("word")
 	isSuc, reason := captcha.Verify(key, word)
 	if isSuc {
-		this.AjaxMsg(nil,0,"", "成功")
-	}else {
-		this.AjaxMsg(nil,1,reason,"")
+		this.AjaxMsg(nil, 0, "", "成功")
+	} else {
+		this.AjaxMsg(nil, 1, reason, "")
 	}
 }
 
 func createCaptcha() {
 	if captcha == nil {
-		beego.Debug("创建Captcha")
+		YYLog.Debug("创建Captcha")
 		once.Do(func() {
 			wordDict, captchaConfig, imageConfig, filterConfig, storeConfig := loadConfig()
 			wordmgr, err := gocaptcha.CreateWordManagerFromDataFile(wordDict)
 			if err != nil {
-				beego.Error(err)
+				YYLog.Error(err)
 			}
 			captcha, err = gocaptcha.CreateCaptcha(wordmgr, captchaConfig, imageConfig, filterConfig, storeConfig)
 			if err != nil {
-				beego.Error(err)
+				YYLog.Error(err)
 			}
 		})
 	}
 }
 func loadConfig() (string, *gocaptcha.CaptchaConfig, *gocaptcha.ImageConfig, *gocaptcha.FilterConfig, *gocaptcha.StoreConfig) {
-	fileNames ,_ := com.StatDir(".")
-	beego.Warn(fileNames)
+	fileNames, _ := com.StatDir(".")
+	YYLog.Warning(fileNames)
 
 	data_path := "./static/authcode_data/"
 
@@ -120,4 +121,3 @@ func loadConfig() (string, *gocaptcha.CaptchaConfig, *gocaptcha.ImageConfig, *go
 
 	return wordDict, captchaConfig, imageConfig, filterConfig, storeConfig
 }
-

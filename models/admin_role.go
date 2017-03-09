@@ -1,10 +1,24 @@
 package models
 
 import (
+	"YYCMS/conf"
+	"YYCMS/utils/YYLog"
 	"fmt"
+
 	"github.com/astaxie/beego/orm"
-	"github.com/astaxie/beego"
 )
+
+//角色表
+type AdminRole struct {
+	//主键
+	Id int `orm:"column(Id);pk;auto"`
+	//栏目Id
+	CateId int `orm:"column(CateId)"`
+	//名字
+	Title string `orm:"column(Title)"`
+	//排序值
+	Sort int `orm:"column(Sort);default(0)"`
+}
 
 func (t *AdminRole) TableName() string {
 	return "admin_role"
@@ -17,11 +31,11 @@ func GetOneAdminRoleById(Id int) (*AdminRole, error) {
 	adminrole := new(AdminRole)
 	adminrole.Id = Id
 
-	if err := ormer().Read(adminrole,"Id"); err != nil {
-		beego.Error("GetOneAdminRoleById : " + err.Error())
+	if err := ormer().Read(adminrole, "Id"); err != nil {
+		YYLog.Error("GetOneAdminRoleById : " + err.Error())
 		return nil, fmt.Errorf(ErrInfo[DataBaseGetError])
 	}
-	return adminrole,nil
+	return adminrole, nil
 }
 
 //GetAdminRolesNum 获取角色的数量
@@ -29,7 +43,6 @@ func GetOneAdminRoleById(Id int) (*AdminRole, error) {
 //@return	int
 func GetAdminRolesNum(catId int, keyword string) int {
 	var data []orm.Params
-	//todo count
 	sql := "SELECT Id FROM admin_role WHERE CateId = ? AND Title LIKE ? "
 	keyword = "%" + keyword + "%"
 	ormer().Raw(sql, catId, keyword).Values(&data)
@@ -48,44 +61,75 @@ func GetAdminRoles(catId int, keyword string, pagesize, offset int) []orm.Params
 	return data
 }
 
+//ReadOneRole 读取某个角色
+//@params	id
+//@retrun	*Role error
+func ReadOneRole(id int) (orm.Params, error) {
+
+	var results []orm.Params
+	if _, err := ormer().Raw(`SELECT * FROM admin_role WHERE Id = ?`, id).Values(&results); err != nil {
+		return nil, fmt.Errorf(ErrInfo[DataBaseGetError])
+	}
+	return results[0], nil
+}
+
+func ReadOneRoleCates(id int) map[string]string {
+	var roleCates []orm.Params
+	if id == conf.SuperAdminRoleId {
+		ormer().Raw(`SELECT CateId, group_concat(privilege.PrivilegeId) as RoleActionIds, group_concat(privilege.Action) as RoleActions from (SELECT privilege.*, role_privilege.PrivilegeId, role_privilege.RoleId FROM privilege, role_privilege WHERE privilege.Id = role_privilege.PrivilegeId GROUP BY privilege.Id) privilege GROUP BY CateId;`).Values(&roleCates)
+	} else {
+		ormer().Raw(`SELECT CateId, group_concat(role_privilege.PrivilegeId) as RoleActionIds, group_concat(privilege.Action) as RoleActions FROM privilege, role_privilege WHERE privilege.Id = role_privilege.PrivilegeId AND role_privilege.RoleId = ? GROUP BY CateId;`, id).Values(&roleCates)
+	}
+	roleCatesMap := make(map[string]string, 0)
+	for _, roleCate := range roleCates {
+		roleCatesMap[roleCate["CateId"].(string)] = roleCate["RoleActionIds"].(string)
+	}
+	return roleCatesMap
+}
+
+func ReadOneRoleCatesWithActions(id int) map[string]string {
+	var roleCates []orm.Params
+	if id == conf.SuperAdminRoleId {
+		ormer().Raw(`SELECT CateId, group_concat(privilege.Action) as RoleActions FROM privilege GROUP BY CateId;`).Values(&roleCates)
+	} else {
+		ormer().Raw(`SELECT CateId, group_concat(role_privilege.PrivilegeId) as RoleActionIds, group_concat(privilege.Action) as RoleActions FROM privilege, role_privilege WHERE privilege.Id = role_privilege.PrivilegeId AND role_privilege.RoleId = ? GROUP BY CateId;`, id).Values(&roleCates)
+	}
+	roleCatesMap := make(map[string]string, 0)
+	for _, roleCate := range roleCates {
+		roleCatesMap[roleCate["CateId"].(string)] = roleCate["RoleActions"].(string)
+	}
+	return roleCatesMap
+}
+
 //CreateOneAdminRole 新建一篇角色
 //@params	catId title thumb source description content
 //@return	error
-func CreateOneAdminRole(cateId int, title, description, permission string) error {
+func CreateOneAdminRole(cateId int, title string) (int, error) {
 	adminrole := new(AdminRole)
 	adminrole.CateId = cateId
 	adminrole.Title = title
-	adminrole.Description = description
-	adminrole.OperationPermission = permission
 
-	if _,err := ormer().Insert(adminrole); err != nil {
-		beego.Error("CreateOneAdminRole : " + err.Error())
-		return fmt.Errorf(ErrInfo[SystemError])
+	if index, err := ormer().Insert(adminrole); err != nil {
+		YYLog.Error("CreateOneAdminRole : " + err.Error())
+		return 0, fmt.Errorf(ErrInfo[SystemError])
+	} else {
+		return int(index), nil
 	}
-	return nil
+
 }
 
 //UpdateAdminRole 更新角色
 //@params	id title description
 //@return	error
-func UpdateAdminRole(id, cateId int, title, description, permission string) error {
-	adminrole,err := GetOneAdminRoleById(id)
+func UpdateAdminRole(id int, title string) error {
+	adminrole, err := GetOneAdminRoleById(id)
 	if err != nil {
 		return err
 	}
-
 	adminrole.Title = title
-	adminrole.CateId = cateId
-	adminrole.OperationPermission = permission
 
-	if description != "" {
-		adminrole.Description = description
-	}
-
-
-
-	if _,err := ormer().Update(adminrole); err != nil {
-		beego.Error("UpdateAdminRole : " + err.Error())
+	if _, err := ormer().Update(adminrole); err != nil {
+		YYLog.Error("UpdateAdminRole : " + err.Error())
 		return fmt.Errorf(ErrInfo[SystemError])
 	} else {
 		return nil
@@ -96,13 +140,13 @@ func UpdateAdminRole(id, cateId int, title, description, permission string) erro
 //@params	id sort
 //@return	error
 func UpdateAdminRoleSort(id, sort int) error {
-	adminrole,err := GetOneAdminRoleById(id)
+	adminrole, err := GetOneAdminRoleById(id)
 	if err != nil {
 		return fmt.Errorf(ErrInfo[SystemError])
 	}
 	adminrole.Sort = sort
-	if _,err := ormer().Update(adminrole,"Sort"); err != nil {
-		beego.Error("UpdateAdminRoleSort : " + err.Error())
+	if _, err := ormer().Update(adminrole, "Sort"); err != nil {
+		YYLog.Error("UpdateAdminRoleSort : " + err.Error())
 		return fmt.Errorf(ErrInfo[SystemError])
 	}
 	return nil
@@ -112,12 +156,12 @@ func UpdateAdminRoleSort(id, sort int) error {
 //@params	id
 //@return	error
 func DeleteOneAdminRole(id int) error {
-	adminrole,err := GetOneAdminRoleById(id)
+	adminrole, err := GetOneAdminRoleById(id)
 	if err != nil {
 		return err
 	}
-	if _,err := ormer().Delete(adminrole); err != nil {
-		beego.Error("DeleteOneAdminRole : " + err.Error())
+	if _, err := ormer().Delete(adminrole); err != nil {
+		YYLog.Error("DeleteOneAdminRole : " + err.Error())
 		return fmt.Errorf(ErrInfo[SystemError])
 	}
 	return nil
@@ -145,13 +189,11 @@ func SearchAdminRoles(cateId int, keyword string, pagesize, offset int) []orm.Pa
 //MustCreateOneAdminRole 新建角色
 //@params	catId title thumb source description content
 //@return	error
-func MustCreateOneAdminRole(id, cateId int, title, description, permission string) error {
+func MustCreateOneAdminRole(id, cateId int, title string) error {
 	adminrole := new(AdminRole)
 	adminrole.Id = id
 	adminrole.CateId = cateId
 	adminrole.Title = title
-	adminrole.Description = description
-	adminrole.OperationPermission = permission
 	ormer().Insert(adminrole)
 	return nil
 }

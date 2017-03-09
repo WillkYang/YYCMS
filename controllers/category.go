@@ -1,127 +1,136 @@
 package controllers
 
 import (
-	m "YYCMS/models"
 	cnf "YYCMS/conf"
+	m "YYCMS/models"
+	"YYCMS/utils"
+	"YYCMS/utils/YYLog"
+	"strings"
+
 	"github.com/agelinazf/egb"
-	"github.com/astaxie/beego"
+	"Mogu/conf"
+	"YYCMS/helper"
 )
 
 type CategoryController struct {
 	LoginController
 }
 
-//
-//func (c *CategoryController) Prepare() {
-//	beego.Debug("找到控制器")
-//	c.LoginController.Prepare()
-//
-//	//TODO - 添加用户权限验证
-//	beego.Debug("完成父控制器初始化")
-//}
+//添加栏目
+func (c *CategoryController) Add() {
+	parentId := c.MustInt("parentId")
+	cateName := c.MustStr("title")
+	modelId := c.MustInt("modelId")
+	privileges := c.MustStr("privileges")
 
-//获取全部栏目信息
+	privileges = sortPrivileges(privileges)
+
+	if cateId, err := m.CreateOneCategory(modelId, cateName, parentId); err != nil {
+		c.AjaxMsg(nil, m.ErrCode[err.Error()], err.Error(), "")
+		return
+	} else {
+		if err := m.CreatePrivileges(cateId, privileges); err != nil {
+			c.AjaxMsg(nil, m.ErrCode[err.Error()], err.Error(), "")
+			return
+		} else {
+			m.UpdateCache()
+			m.CreateOneLog(c.User.Account, "添加栏目："+cateName)
+			c.AjaxMsg(nil, m.NoError, "", "添加栏目成功")
+		}
+	}
+}
+
+//编辑栏目
+func (c *CategoryController) Update() {
+	id := c.MustInt("id")
+	title := c.MustStr("title")
+	privileges := c.MustStr("privileges")
+	privileges = sortPrivileges(privileges)
+	YYLog.Warning(privileges)
+	oldCategory, err := m.GetOneCategoryById(id)
+	if err != nil {
+		YYLog.Error(err)
+		c.AjaxMsg(nil, m.DataBaseGetError, m.ErrInfo[m.DataBaseGetError], "")
+		return
+	}
+
+	//更新栏目信息
+	if err := m.UpdateCategory(id, oldCategory.ModelId, oldCategory.ParentId, title); err != nil {
+		m.UpdateCache()
+		c.AjaxMsg(nil, m.ErrCode[err.Error()], err.Error(), "")
+		return
+	}
+
+	//删除旧的权限
+	if err := m.DeleteAllPrivileges(id); err != nil {
+		m.UpdateCache()
+		c.AjaxMsg(nil, m.ErrCode[err.Error()], err.Error(), "")
+		return
+	}
+
+	if oldCategory.ModelId != conf.DirModelId {
+		//添加新的权限
+		if err := m.CreatePrivileges(id, privileges); err != nil {
+			m.UpdateCache()
+			c.AjaxMsg(nil, m.ErrCode[err.Error()], err.Error(), "")
+			return
+		}
+	}
+
+	m.UpdateCache()
+	m.CreateOneLog(c.User.Account, "编辑栏目")
+	c.AjaxMsg(nil, m.NoError, "", "编辑栏目成功")
+}
+
+//栏目列表
 func (c *CategoryController) List() {
-	c.MustGet()
 	topCateId := cnf.TopCateId
-	beego.Debug(c.Ctx.Input.Query("isRecursion"))
+	YYLog.Debug(c.Ctx.Input.Query("isRecursion"))
 	isrecursion := c.Int("isRecursion")
 	if c.Int("topCateId") > 0 {
 		topCateId = c.Int("topCateId")
 	}
-	cates := m.GetSubCategorysById(topCateId, isrecursion > 0)
-	beego.Debug(cates)
+	cates := m.GetSubCategorysByIdWithCache(topCateId, c.User.Role, isrecursion <= 0)
 	c.Msg["keyword"] = ""
 	c.Msg["count"] = len(cates)
 	c.Msg["lists"] = cates
+
 	c.AjaxMsg(c.Msg, m.NoError, "", "")
 }
 
-////获取后台顶部栏目信息
-//func (c *CategoryController) TopCates() {
-//	cates := m.GetSubCategorysById(cnf.TopCateId, false)
-//	c.AjaxMsg(cates, m.NoError, "", "")
-//}
-
-////获取全部栏目类型
-//func (c *CategoryController) Models() {
-//	models := m.GetAllModel()
-//	c.Msg["models"] = models
-//	c.AjaxMsg(c.Msg, m.NoError, "", "")
-//}
-
-
-//Profile 查看栏目详情
-//@params	id
-//@return	AdminRole
-func (c *CategoryController) Profile () {
-	c.MustGet()
+//栏目详情
+func (c *CategoryController) Profile() {
 	id := c.MustInt("id")
-	if data,err := m.GetOneCategoryById(id); err != nil {
+	if data, err := m.GetOneCategoryRawById(id); err != nil {
 		c.AjaxMsg(nil, m.ErrCode[err.Error()], err.Error(), "")
 	} else {
 		c.AjaxMsg(data, m.NoError, "", "")
 	}
 }
 
-//Add 添加栏目动作
-//@params   pid name catetype modelid
-//@return   success/error
-func (c *CategoryController) Add() {
-	c.MustPost()
-
-	parentId := c.MustInt("parentId")
-	cateName := c.MustStr("title")
-	modelId := c.MustInt("modelId")
-	description := c.Str("description")
-
-	if err := m.CreateOneCategory(modelId,cateName,description,parentId); err != nil {
-		c.AjaxMsg(nil, m.ErrCode[err.Error()], err.Error(), "添加成功")
-		return
-	}
-	m.UpdateCache()
-	c.AjaxMsg(nil, m.NoError, "", "添加栏目成功")
-}
-
-//Update 编辑栏目动作
-//@params	id name
-//@return	success/error
-func (c *CategoryController) Update() {
-	c.MustPost()
-	id := c.MustInt("id")
-	title := c.MustStr("title")
-	modelId := c.MustInt("modelId")
-	parentId := c.MustInt("parentId")
-	description := c.Str("description")
-
-	if err := m.UpdateCategory(id,modelId,parentId,title,description); err != nil {
-		c.AjaxMsg(nil, m.ErrCode[err.Error()], err.Error(),"")
-		return
-	}
-	m.UpdateCache()
-	c.AjaxMsg(nil, m.NoError, "", "编辑栏目成功")
-}
-
-//Delete 删除栏目
-//@params	id
-//@return	success/error
+//删除栏目
 func (c *CategoryController) Delete() {
-	c.MustPost()
 	id := c.MustInt("id")
 	if err := m.DeleteOneCategory(id); err != nil {
+		c.AjaxMsg(nil, m.ErrCode[err.Error()], err.Error(), "")
+		m.UpdateCache()
+		return
+	}
+	if err := m.DeleteAllPrivileges(id); err != nil {
+		m.UpdateCache()
 		c.AjaxMsg(nil, m.ErrCode[err.Error()], err.Error(), "")
 		return
 	}
 	m.UpdateCache()
+	m.CreateOneLog(c.User.Account, "删除栏目")
 	c.AjaxMsg(nil, m.NoError, "", "删除成功")
 }
 
-//Sort 栏目排序
-//params	int : int 栏目Id : 新sort值
-//@return	success/error
+//栏目排序
 func (c *CategoryController) Sort() {
-	c.MustPost()
 	postdata := c.Ctx.Request.PostForm
+
+	YYLog.Warning(postdata)
 	for k, v := range postdata {
 		catId := egb.StringToInt(k)
 		_, err := m.GetOneCategoryById(catId)
@@ -138,3 +147,20 @@ func (c *CategoryController) Sort() {
 	c.AjaxMsg(nil, m.NoError, "", "排序成功")
 }
 
+//全部权限
+func (c *CategoryController) AllActions() {
+	actions := helper.SystemAllAction()
+	c.AjaxMsg(actions, m.NoError, m.ErrInfo[m.NoError], "")
+}
+
+//整理权限
+func sortPrivileges(privileges string) string {
+	actions := GetAllActions()
+	var privs []string
+	for _, action := range actions {
+		if strings.Contains(privileges, action) {
+			privs = append(privs, action)
+		}
+	}
+	return utils.StringArrayToString(privs)
+}

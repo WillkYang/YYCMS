@@ -2,32 +2,34 @@ package models
 
 import (
 	"fmt"
-	"github.com/astaxie/beego"
-	"github.com/astaxie/beego/orm"
+
+	"YYCMS/utils/YYLog"
+
 	"github.com/agelinazf/egb"
+	"github.com/astaxie/beego/orm"
 )
 
 //轮换图表
 type Carousel struct {
 	//主键
-	Id          int `orm:"column(Id);pk"`
+	Id int `orm:"column(Id);pk;auto"`
 	//栏目Id
-	CateId      int    `orm:"column(CateId)"`
+	CateId int `orm:"column(CateId)"`
 	//名字
-	Title       string `orm:"column(Title)"`
+	Title string `orm:"column(Title)"`
 	//描述
 	Description string `orm:"column(Description);null"`
 	//创建时间
-	CreateTime  string `orm:"column(CreateTime)"`
+	CreateTime string `orm:"column(CreateTime)"`
 	//更新时间
-	UpdateTime  string `orm:"column(UpdateTime)"`
+	UpdateTime string `orm:"column(UpdateTime)"`
 	//排序值
-	Sort        int `orm:"column(Sort);default(0)"`
+	Sort int `orm:"column(Sort);default(0)"`
 
 	//链接地址
-	Url         string `orm:"column(Url)"`
+	Url string `orm:"column(Url)"`
 	//图片
-	Path 		string 	`orm:"column(Path)"`
+	Path string `orm:"column(Path)"`
 }
 
 //GetOneCarouselById 获取一个轮换图
@@ -37,11 +39,11 @@ func GetOneCarouselById(Id int) (*Carousel, error) {
 	carousel := new(Carousel)
 	carousel.Id = Id
 
-	if err := ormer().Read(carousel,"Id"); err != nil {
-		beego.Error("GetOneCarouselById : " + err.Error())
+	if err := ormer().Read(carousel, "Id"); err != nil {
+		YYLog.Error("GetOneCarouselById : " + err.Error())
 		return nil, fmt.Errorf(ErrInfo[DataBaseGetError])
 	}
-	return carousel,nil
+	return carousel, nil
 }
 
 //GetCarouselsNum 获取轮换图的数量
@@ -49,7 +51,6 @@ func GetOneCarouselById(Id int) (*Carousel, error) {
 //@return	int
 func GetCarouselsNum(catId int, keyword string) int {
 	var data []orm.Params
-	//todo count
 	sql := "SELECT Id FROM carousel WHERE CateId = ? AND Title LIKE ? "
 	keyword = "%" + keyword + "%"
 	ormer().Raw(sql, catId, keyword).Values(&data)
@@ -81,8 +82,8 @@ func CreateOneCarousel(cateId int, title, url, path, description string) error {
 	carousel.CreateTime = egb.TimeNowUnix()
 	carousel.UpdateTime = egb.TimeNowUnix()
 
-	if _,err := ormer().Insert(carousel); err != nil {
-		beego.Error("CreateOneCarousel : " + err.Error())
+	if _, err := ormer().Insert(carousel); err != nil {
+		YYLog.Error("CreateOneCarousel : " + err.Error())
 		return fmt.Errorf(ErrInfo[SystemError])
 	}
 	return nil
@@ -92,7 +93,7 @@ func CreateOneCarousel(cateId int, title, url, path, description string) error {
 //@params	id title description
 //@return	error
 func UpdateCarousel(id, cateId int, title, url, path, description string) error {
-	carousel,err := GetOneCarouselById(id)
+	carousel, err := GetOneCarouselById(id)
 	if err != nil {
 		return err
 	}
@@ -105,8 +106,8 @@ func UpdateCarousel(id, cateId int, title, url, path, description string) error 
 	carousel.CreateTime = egb.TimeNowUnix()
 	carousel.UpdateTime = egb.TimeNowUnix()
 
-	if _,err := ormer().Update(carousel); err != nil {
-		beego.Error("UpdateCarousel : " + err.Error())
+	if _, err := ormer().Update(carousel); err != nil {
+		YYLog.Error("UpdateCarousel : " + err.Error())
 		return fmt.Errorf(ErrInfo[SystemError])
 	} else {
 		return nil
@@ -117,14 +118,14 @@ func UpdateCarousel(id, cateId int, title, url, path, description string) error 
 //@params	id sort
 //@return	error
 func UpdateCarouselSort(id, sort int) error {
-	carousel,err := GetOneCarouselById(id)
+	carousel, err := GetOneCarouselById(id)
 	if err != nil {
 		return fmt.Errorf(ErrInfo[SystemError])
 	}
 	carousel.Sort = sort
-	beego.Debug(carousel)
-	if _,err := ormer().Update(carousel,"Sort"); err != nil {
-		beego.Error("UpdateCarouselSort : " + err.Error())
+	YYLog.Debug(carousel)
+	if _, err := ormer().Update(carousel, "Sort"); err != nil {
+		YYLog.Error("UpdateCarouselSort : " + err.Error())
 		return fmt.Errorf(ErrInfo[SystemError])
 	}
 	return nil
@@ -134,12 +135,12 @@ func UpdateCarouselSort(id, sort int) error {
 //@params	id
 //@return	error
 func DeleteOneCarousel(id int) error {
-	carousel,err := GetOneCarouselById(id)
+	carousel, err := GetOneCarouselById(id)
 	if err != nil {
 		return err
 	}
-	if _,err := ormer().Delete(carousel); err != nil {
-		beego.Error("DeleteOneCarousel : " + err.Error())
+	if _, err := ormer().Delete(carousel); err != nil {
+		YYLog.Error("DeleteOneCarousel : " + err.Error())
 		return fmt.Errorf(ErrInfo[SystemError])
 	}
 	return nil

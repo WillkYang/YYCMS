@@ -4,7 +4,7 @@ package models
 const SystemError = -1
 
 const (
-	NoError = iota
+	NoError         = iota
 	ParamsMissError //1
 	ParamsTypeError
 	LoginError
@@ -31,6 +31,10 @@ const (
 	CaptchaError
 	VideoFormatError
 	DataBaseGetError
+	DataBaseUpdateError
+	DataStructError
+	ErrorNoRows
+	OperateError
 )
 
 var ErrInfo = map[int]string{
@@ -61,7 +65,11 @@ var ErrInfo = map[int]string{
 	PwdRepeatError:                        "新密码不能和旧密码一致",
 	CaptchaError:                          "验证码错误",
 	VideoFormatError:                      "视频文件格式错误，目前只支持mp4,flv,mov,rmvb,avi格式文件",
-	DataBaseGetError:                            "数据库获取异常",
+	DataBaseGetError:                      "数据库获取异常",
+	DataBaseUpdateError:                   "数据库更新异常",
+	DataStructError:                       "数据格式不正确,请检查数据格式",
+	ErrorNoRows:                           "没有找到符合条件的数据",
+	OperateError:                          "操作失败",
 }
 var ErrCode = map[string]int{
 	"系统内部错误":                 SystemError,
@@ -91,5 +99,9 @@ var ErrCode = map[string]int{
 	"新密码不能和旧密码一致":            PwdRepeatError,
 	"验证码错误":                  CaptchaError,
 	"视频文件格式错误，目前只支持mp4,flv,mov,rmvb,avi格式文件": VideoFormatError,
-	"数据库获取异常":                            DataBaseGetError,
+	"数据库获取异常":                                DataBaseGetError,
+	"数据库更新异常":                                DataBaseUpdateError,
+	"数据格式不正确,请检查数据格式":                        DataStructError,
+	"没有找到符合条件的数据":                            ErrorNoRows,
+	"操作失败":                                   OperateError,
 }

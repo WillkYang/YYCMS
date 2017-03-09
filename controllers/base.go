@@ -2,14 +2,29 @@ package controllers
 
 import (
 	m "YYCMS/models"
+	"YYCMS/utils/YYLog"
 	"strconv"
+	"strings"
+
+	ycnf "YYCMS/conf"
+
 	"github.com/astaxie/beego"
 	"github.com/astaxie/beego/validation"
-	"strings"
 )
 
 type BaseController struct {
 	beego.Controller
+	Msg            map[string]interface{}
+	controllerName string
+	actionName     string
+}
+
+func (c *BaseController) Prepare() {
+	c.Msg = make(map[string]interface{})
+	c.Ctx.Output.Header("x-frame-options", "SAMEORIGIN")
+
+	//获取请求方法名称
+	c.controllerName,c.actionName = c.GetControllerAndAction()
 }
 
 //Display 渲染模版
@@ -49,7 +64,6 @@ func (c *BaseController) AjaxMsg(msg interface{}, errCode int, errMsg, sucMsg st
 	c.jsonResult(out)
 }
 
-
 func (c *BaseController) jsonResult(out interface{}) {
 	c.Data["json"] = out
 	c.ServeJSON()
@@ -67,7 +81,7 @@ func (c *BaseController) ajaxMsg(msg interface{}, errCode int, errMsg string, su
 }
 
 //MustInt 获取int类型参数 ，参数不能为空
-func (c *BaseController) MustInt(param string) int {
+func (c *BaseController) MustInt(param string, desc ...string) int {
 	if strv := c.Ctx.Input.Query(param); strv != "" {
 		i, err := strconv.Atoi(strv)
 		if err != nil {
@@ -76,8 +90,12 @@ func (c *BaseController) MustInt(param string) int {
 		}
 		return i
 	}
-	paramerror := "参数 " + param + " 不能为空"
-	c.ajaxMsg(nil, m.ParamsMissError, paramerror, "")
+	if len(desc) > 0 {
+		c.ajaxMsg(nil, m.ParamsTypeError, desc[0], "")
+	} else {
+		paramerror := "参数 " + param + " 不能为空"
+		c.ajaxMsg(nil, m.ParamsTypeError, paramerror, "")
+	}
 	return 0
 }
 
@@ -149,15 +167,23 @@ func (c *BaseController) Bool(param string) bool {
 		}
 		return b
 	}
-	return true
+	return false
 }
 
 //MustStr 获取string类型参数 ，参数不能为空
-func (c *BaseController) MustStr(param string) string {
+//无法确定是否需要使用英文返回，所以最后决定提示内容直接由调用方返回
+func (c *BaseController) MustStr(param string, desc ...string) string {
 	str := c.Ctx.Input.Query(param)
+	if param == "keyword" {
+		str = strings.TrimSpace(str)
+	}
 	if str == "" {
-		paramerror := "参数 " + param + " 不能为空"
-		c.ajaxMsg(nil, m.ParamsTypeError, paramerror, "")
+		if len(desc) > 0 {
+			c.ajaxMsg(nil, m.ParamsTypeError, desc[0], "")
+		} else {
+			paramerror := "参数 " + param + " 不能为空"
+			c.ajaxMsg(nil, m.ParamsTypeError, paramerror, "")
+		}
 	}
 	return str
 }
@@ -165,6 +191,9 @@ func (c *BaseController) MustStr(param string) string {
 //Str 获取string类型参数,参数可以为空
 func (c *BaseController) Str(param string) string {
 	str := c.Ctx.Input.Query(param)
+	if param == "keyword" {
+		str = strings.TrimSpace(str)
+	}
 	return str
 }
 
@@ -196,29 +225,41 @@ func (c *BaseController) MustGet() {
 	}
 }
 
-func (c *BaseController) finish (result interface{}) {
-	beego.Debug("处理返回")
-	if err,ok := result.(error); ok {
+func (c *BaseController) finish(result interface{}) {
+	YYLog.Debug("处理返回")
+	if err, ok := result.(error); ok {
 		//err := error(result.(error))
-		errcode,_ := strconv.Atoi(err.Error())
-		beego.Debug("进入err处理方法")
+		errcode, _ := strconv.Atoi(err.Error())
+		YYLog.Debug("进入err处理方法")
 		c.AjaxMsg(nil, errcode, m.ErrInfo[errcode], "")
 	} else {
-		beego.Debug("进入成功回调")
+		YYLog.Debug("进入成功回调")
 		c.AjaxMsg(result, m.NoError, "", "")
 	}
 }
 
 func (c *BaseController) handleValidParam(obj interface{}) {
 	valid := validation.Validation{}
-	b,err := valid.Valid(obj)
+	b, err := valid.Valid(obj)
 	if err != nil {
-		beego.Error(err)
+		YYLog.Error(err)
 	}
 	if !b {
-		for _,err := range valid.Errors {
-			beego.Error(err)
-			c.AjaxMsg(nil,m.ParamsTypeError,err.Message,"")
+		for _, err := range valid.Errors {
+			YYLog.Error(err)
+			c.AjaxMsg(nil, m.ParamsTypeError, err.Message, "")
 		}
+	}
+}
+
+func FormatPage(page *int) {
+	if *page == 0 {
+		*page = 1
+	}
+}
+
+func FormatPageSize(pagesize *int) {
+	if *pagesize <= 0 {
+		*pagesize = ycnf.DefaultPageSize
 	}
 }

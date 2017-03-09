@@ -1,26 +1,19 @@
 package controllers
 
 import (
-	m "YYCMS/models"
-	"github.com/agelinazf/egb"
 	cnf "YYCMS/conf"
+	m "YYCMS/models"
+	"YYCMS/utils"
+	"math"
+
+	"github.com/agelinazf/egb"
 )
 
 type AdminRoleController struct {
 	LoginController
 }
 
-//func (c *AdminRoleController) Prepare() {
-//	beego.Debug("找到控制器")
-//	c.LoginController.Prepare()
-//
-//	//TODO - 添加用户权限验证
-//	beego.Debug("完成父控制器初始化")
-//}
-
-//List 获取角色列表
-//@params   keyword(搜索title的关键词)
-//@return   []AdminRole
+//角色列表
 func (c *AdminRoleController) List() {
 	page := c.Int("page")
 	keyword := c.Str("keyword")
@@ -36,42 +29,64 @@ func (c *AdminRoleController) List() {
 	}
 
 	count := m.GetAdminRolesNum(cateId, keyword)
-	data := m.GetAdminRoles(cateId, keyword, pagesize, (page - 1) * pagesize)
-
+	datas := m.GetAdminRoles(cateId, keyword, pagesize, (page-1)*pagesize)
+	for _, data := range datas {
+		roleId := egb.StringToInt(data["Id"].(string))
+		//cates := m.GetSubCategorysByIdWithCache(cnf.TopCateId, roleId, true)
+		data["RoleCates"] = m.ReadOneRoleCates(roleId)
+	}
 	c.Msg["keyword"] = keyword
 	c.Msg["count"] = count
-	c.Msg["lists"] = data
+	c.Msg["lists"] = datas
 	c.Msg["page"] = page
 	c.AjaxMsg(c.Msg, m.NoError, "", "")
 }
 
+func (c *AdminRoleController) All() {
+	cateId := c.MustInt("cateId")
+	data := m.GetAdminRoles(cateId, "", math.MaxInt64, 0)
+	c.Msg["lists"] = data
+	c.AjaxMsg(c.Msg, m.NoError, "", "")
+}
 
-//Profile 查看角色详情
-//@params	id
-//@return	AdminRole
-func (c *AdminRoleController) Profile () {
+//角色详情
+func (c *AdminRoleController) Profile() {
 	id := c.MustInt("id")
-	if data,err := m.GetOneAdminRoleById(id); err != nil {
+	if data, err := m.ReadOneRole(id); err != nil {
 		c.AjaxMsg(nil, m.ErrCode[err.Error()], err.Error(), "")
 	} else {
 		c.AjaxMsg(data, m.NoError, "", "")
 	}
-
 }
 
-//AddAdminRole 添加角色
-//@params	cateId modelId title description permission
-//@return	success/error
+//添加角色
 func (c *AdminRoleController) Add() {
 	cateId := c.MustInt("cateId")
 	title := c.MustStr("title")
-	description := c.Str("description")
-	permission := c.MustStr("permission")
+	privIds := c.MustStr("privIds")
 
-	if err := m.CreateOneAdminRole(cateId, title, description, permission); err != nil {
+	//1.添加角色
+	roleId, err := m.CreateOneAdminRole(cateId, title)
+	if err != nil {
 		c.AjaxMsg(nil, m.ErrCode[err.Error()], err.Error(), "")
 		return
 	}
+
+	//删除旧权限
+	if err := m.DeleteAllRolePrivileges(roleId); err != nil {
+		c.AjaxMsg(nil, m.ErrCode[err.Error()], err.Error(), "")
+		return
+	}
+
+	//添加新的权限
+	for _, privId := range utils.StringToIntArray(privIds) {
+		if err := m.CreateOneRolePrivilege(roleId, privId); err != nil {
+			c.AjaxMsg(nil, m.ErrCode[err.Error()], err.Error(), "")
+			return
+		}
+	}
+	m.UpdateCache()
+	m.CreateOneLog(c.User.Account, "添加角色")
 	c.AjaxMsg(nil, m.NoError, "", "添加成功")
 }
 
@@ -79,16 +94,33 @@ func (c *AdminRoleController) Add() {
 //@params	id cateId modelId title description permission
 //@return	success/error
 func (c *AdminRoleController) Update() {
-	id := c.MustInt("id")
-	cateId := c.MustInt("cateId")
+	roleId := c.MustInt("id")
 	title := c.MustStr("title")
-	description := c.Str("description")
-	permission := c.MustStr("permission")
+	privIds := c.Str("privIds")
 
-	if err := m.UpdateAdminRole(id, cateId, title, description, permission); err != nil {
+	//更新角色
+	if err := m.UpdateAdminRole(roleId, title); err != nil {
 		c.AjaxMsg(nil, m.ErrCode[err.Error()], err.Error(), "")
 		return
 	}
+
+	if roleId != cnf.SuperAdminRoleId {
+		//删除旧权限
+		if err := m.DeleteAllRolePrivileges(roleId); err != nil {
+			c.AjaxMsg(nil, m.ErrCode[err.Error()], err.Error(), "")
+			return
+		}
+
+		//添加新的权限
+		for _, privId := range utils.StringToIntArray(privIds) {
+			if err := m.CreateOneRolePrivilege(roleId, privId); err != nil {
+				c.AjaxMsg(nil, m.ErrCode[err.Error()], err.Error(), "")
+				return
+			}
+		}
+	}
+	m.UpdateCache()
+	m.CreateOneLog(c.User.Account, "编辑角色")
 	c.AjaxMsg(nil, m.NoError, "", "编辑成功")
 }
 
@@ -96,11 +128,33 @@ func (c *AdminRoleController) Update() {
 //@params	id
 //@return	error
 func (c *AdminRoleController) Delete() {
-	id := c.MustInt("id")
-	if err := m.DeleteOneAdminRole(id); err != nil {
+	roleId := c.MustInt("id")
+
+	//超级管理员不允许删除
+	if roleId == -1 {
+		c.AjaxMsg(nil, m.OperateError, "操作失败，超级管理员不可删除", "")
+		return
+	}
+
+	//判断是否存在该角色的管理员，若有则拒绝删除
+	if m.GetAdminUserNumByRole(roleId) > 0 {
+		c.AjaxMsg(nil, m.OperateError, "操作失败，请先删除此角色下的管理员", "")
+		return
+	}
+
+	//删除角色
+	if err := m.DeleteOneAdminRole(roleId); err != nil {
 		c.AjaxMsg(nil, m.ErrCode[err.Error()], err.Error(), "")
 		return
 	}
+
+	//删除权限
+	if err := m.DeleteAllRolePrivileges(roleId); err != nil {
+		c.AjaxMsg(nil, m.ErrCode[err.Error()], err.Error(), "")
+		return
+	}
+	m.UpdateCache()
+	m.CreateOneLog(c.User.Account, "删除角色")
 	c.AjaxMsg(nil, m.NoError, "", "删除成功")
 }
 

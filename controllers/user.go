@@ -1,10 +1,11 @@
 package controllers
 
 import (
-	m "YYCMS/models"
 	cnf "YYCMS/conf"
-	"github.com/agelinazf/egb"
+	m "YYCMS/models"
 	"fmt"
+
+	"github.com/agelinazf/egb"
 )
 
 type AdminUserController struct {
@@ -28,7 +29,7 @@ func (c *AdminUserController) List() {
 	}
 
 	count := m.GetAdminUserNumByRole(roleId)
-	data := m.GetAdminUserByRole(roleId, pagesize, (page - 1) * pagesize)
+	data := m.GetAdminUserByRole(roleId, pagesize, (page-1)*pagesize)
 	c.Msg["count"] = count
 	c.Msg["page"] = page
 	c.Msg["lists"] = data
@@ -40,7 +41,7 @@ func (c *AdminUserController) List() {
 //@return	adminuser
 func (c *AdminUserController) Profile() {
 	id := c.MustInt("id")
-	if user,err := m.GetOneAdminUserById(id); err != nil {
+	if user, err := m.GetOneAdminUserById(id); err != nil {
 		c.AjaxMsg(nil, m.ErrCode[err.Error()], err.Error(), "")
 	} else {
 		user.Password = ""
@@ -55,13 +56,15 @@ func (c *AdminUserController) Profile() {
 func (c *AdminUserController) Add() {
 	account := c.MustStr("account")
 	//pwd := c.MustStr("pwd")
-	pwd := cnf.DefaultAdminPassword
+	pwd := egb.StringSHA1Hex(cnf.DefaultAdminPassword)
+
 	roleId := c.MustInt("roleId")
 	if err := m.CreateOneAdminUser(account, pwd, roleId); err != nil {
 		c.AjaxMsg(nil, m.ErrCode[err.Error()], err.Error(), "")
 		return
 	}
-	c.AjaxMsg(nil, m.NoError, "", fmt.Sprintf("添加成功,密码为：%s,请登陆后立即修改密码", pwd))
+	m.CreateOneLog(c.User.Account, "添加用户："+account)
+	c.AjaxMsg(nil, m.NoError, "", fmt.Sprintf("添加成功,密码为：%s,请登录后立即修改密码", cnf.DefaultAdminPassword))
 }
 
 //Update  更新用户信息操作
@@ -73,10 +76,11 @@ func (c *AdminUserController) Update() {
 	roleId := c.MustInt("roleId")
 	oldpwd := c.Str("pwd")
 	newpwd := c.Str("newpwd")
-	if err := m.UpdateAdminUserInfo(id, roleId, name, oldpwd, newpwd, ); err != nil {
+	if err := m.UpdateAdminUserInfo(id, roleId, name, oldpwd, newpwd); err != nil {
 		c.AjaxMsg(nil, m.ErrCode[err.Error()], err.Error(), "")
 		return
 	}
+	m.CreateOneLog(c.User.Account, "编辑用户："+name)
 	c.AjaxMsg(nil, m.NoError, "", "编辑成功")
 }
 
@@ -85,10 +89,14 @@ func (c *AdminUserController) Update() {
 //@return	success/error
 func (c *AdminUserController) Delete() {
 	id := c.MustInt("id")
+	if id == c.User.Id {
+		c.AjaxMsg(nil, m.SystemError, "无法删除自身用户", "")
+	}
 	if err := m.DeleteOneAdminUser(id); err != nil {
 		c.AjaxMsg(nil, m.ErrCode[err.Error()], err.Error(), "")
 		return
 	}
+	m.CreateOneLog(c.User.Account, "删除用户")
 	c.AjaxMsg(nil, m.NoError, "", "删除成功")
 }
 
@@ -96,12 +104,40 @@ func (c *AdminUserController) Delete() {
 //@params	userId
 //@return	success/error
 func (c *AdminUserController) ResetPwd() {
-	id := c.MustInt("id")
-	if err := m.ResetAdminUserPwd(id); err != nil {
+	userId := c.MustInt("id")
+	if err := m.ResetAdminUserPwd(userId); err != nil {
 		c.AjaxMsg(nil, m.ErrCode[err.Error()], err.Error(), "")
 		return
 	}
-	c.AjaxMsg(nil, m.NoError, "", "重置密码成功")
+	m.CreateOneLog(c.User.Account, "重置用户密码："+egb.StringFromInt(userId))
+	c.AjaxMsg(nil, m.NoError, "", "重置密码成功,默认密码为:"+cnf.DefaultAdminPassword)
+}
+
+//UpdatePwd 修改密码
+//@params	password
+//@return	success/error
+func (c *AdminUserController) UpdatePwd() {
+	oldPwd := c.MustStr("oldPwd")
+	newPwd := c.MustStr("newPwd")
+
+	if oldPwd == newPwd {
+		c.AjaxMsg(nil, m.PwdRepeatError, m.ErrInfo[m.PwdRepeatError], "")
+		return
+	}
+
+	if !egb.RegexpIsStrongPassword(newPwd) {
+		c.AjaxMsg(nil, m.PwdWeakError, m.ErrInfo[m.PwdWeakError], "")
+		return
+	}
+
+	if user, err := m.UpdateAdminUserPwd(c.User.Id, oldPwd, newPwd); err != nil {
+		c.AjaxMsg(nil, m.ErrCode[err.Error()], err.Error(), "")
+		return
+	} else {
+		c.User = *user
+		c.UpdateCookie()
+	}
+	c.AjaxMsg(nil, m.NoError, "", "修改密码成功")
 }
 
 //SortAdminRole 对角色进行排序

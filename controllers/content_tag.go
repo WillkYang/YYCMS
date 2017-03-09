@@ -1,23 +1,22 @@
 package controllers
 
-
 import (
-	"github.com/agelinazf/egb"
 	cnf "YYCMS/conf"
 	m "YYCMS/models"
-	"github.com/astaxie/beego"
+	"YYCMS/utils/YYLog"
+	"math"
+
+	"github.com/agelinazf/egb"
 )
 
-
-type GalleryController struct {
+type TagController struct {
 	LoginController
 }
 
-
-//List 获取相册列表
+//List 获取标签列表
 //@params   keyword(搜索title的关键词)
-//@return   []Gallery
-func (c *GalleryController) List() {
+//@return   []Tag
+func (c *TagController) List() {
 	page := c.Int("page")
 	keyword := c.Str("keyword")
 	cateId := c.MustInt("cateId")
@@ -31,8 +30,10 @@ func (c *GalleryController) List() {
 		pagesize = cnf.DefaultPageSize
 	}
 
-	count := m.GetGallerysNum(cateId, keyword)
-	data := m.GetGallerys(cateId, keyword, pagesize, (page - 1) * pagesize)
+	count := m.GetTagsNum(cateId, keyword)
+	YYLog.Info(count)
+	data := m.GetTags(cateId, keyword, pagesize, (page-1)*pagesize)
+	YYLog.Info(data)
 
 	c.Msg["keyword"] = keyword
 	c.Msg["count"] = count
@@ -41,13 +42,19 @@ func (c *GalleryController) List() {
 	c.AjaxMsg(c.Msg, m.NoError, "", "")
 }
 
+func (c *TagController) All() {
+	cateId := c.MustInt("cateId")
+	data := m.GetTags(cateId, "", math.MaxInt64, 0)
+	c.Msg["lists"] = data
+	c.AjaxMsg(c.Msg, m.NoError, "", "")
+}
 
-//Profile 查看相册详情
+//Profile 查看标签详情
 //@params	id
-//@return	Gallery
-func (c *GalleryController) Profile () {
+//@return	Tag
+func (c *TagController) Profile() {
 	id := c.MustInt("id")
-	if data,err := m.GetOneGalleryById(id); err != nil {
+	if data, err := m.GetOneTagById(id); err != nil {
 		c.AjaxMsg(nil, m.ErrCode[err.Error()], err.Error(), "")
 	} else {
 		c.AjaxMsg(data, m.NoError, "", "")
@@ -55,74 +62,73 @@ func (c *GalleryController) Profile () {
 
 }
 
-//AddGallery 添加相册
+//AddTag 添加标签
 //@params	cateId modelId title description
 //@return	success/error
-func (c *GalleryController) Add() {
+func (c *TagController) Add() {
 	cateId := c.MustInt("cateId")
-	modelId := c.Int("modelId")
-	if cate,err := m.GetOneCategoryById(cateId); err != nil {
-		c.AjaxMsg(nil,m.DataBaseGetError,m.ErrInfo[m.DataBaseGetError],"")
-	} else {
-		modelId = cate.ModelId
-	}
 	title := c.MustStr("title")
 	description := c.Str("description")
 
-	if err := m.CreateOneGallery(cateId, modelId, title, description); err != nil {
+	//判读是否已有相同标签-若有则直接返回
+	if _, err := m.GetOneTagByTitle(cateId, title); err == nil {
+		c.AjaxMsg(nil, m.NoError, "", "添加成功")
+		return
+	}
+
+	if _, err := m.CreateOneTag(cateId, title, description); err != nil {
 		c.AjaxMsg(nil, m.ErrCode[err.Error()], err.Error(), "")
 		return
 	}
 	c.AjaxMsg(nil, m.NoError, "", "添加成功")
 }
 
-//UpdateGallery 更新相册
+//UpdateTag 更新标签
 //@params	id cateId modelId title description
 //@return	success/error
-func (c *GalleryController) Update() {
+func (c *TagController) Update() {
 	id := c.MustInt("id")
 	cateId := c.MustInt("cateId")
-	modelId := c.Int("modelId")
-	if cate,err := m.GetOneCategoryById(cateId); err != nil {
-		c.AjaxMsg(nil,m.DataBaseGetError,m.ErrInfo[m.DataBaseGetError],"")
-	} else {
-		modelId = cate.ModelId
-	}
 	title := c.MustStr("title")
 	description := c.Str("description")
 
-	if err := m.UpdateGallery(id, cateId, modelId, title, description); err != nil {
+	//判读是否已有相同标签-若有则直接返回
+	if _, err := m.GetOneTagByTitle(cateId, title); err == nil {
+		c.AjaxMsg(nil, m.SystemError, "存在相同的标签", "")
+		return
+	}
+
+	if err := m.UpdateTag(id, cateId, title, description); err != nil {
 		c.AjaxMsg(nil, m.ErrCode[err.Error()], err.Error(), "")
 		return
 	}
 	c.AjaxMsg(nil, m.NoError, "", "编辑成功")
 }
 
-//DelGallery 删除相册
+//DelTag 删除标签
 //@params	id
 //@return	error
-func (c *GalleryController) Delete() {
+func (c *TagController) Delete() {
 	id := c.MustInt("id")
-	if err := m.DeleteOneGallery(id); err != nil {
+	if err := m.DeleteOneTag(id); err != nil {
 		c.AjaxMsg(nil, m.ErrCode[err.Error()], err.Error(), "")
 		return
 	}
 	c.AjaxMsg(nil, m.NoError, "", "删除成功")
 }
 
-//SortGallery 对相册进行排序
+//SortTag 对标签进行排序
 //@params	id sort
 //@return	success/error
-func (c *GalleryController) Sort() {
+func (c *TagController) Sort() {
 	postdata := c.Ctx.Request.PostForm
-	beego.Debug(postdata)
+	YYLog.Debug(postdata)
 	for k, v := range postdata {
 		id := egb.StringToInt(k)
-		if err := m.UpdateGallerySort(id, egb.StringToInt(v[0])); err != nil {
+		if err := m.UpdateTagSort(id, egb.StringToInt(v[0])); err != nil {
 			c.AjaxMsg(nil, m.ErrCode[err.Error()], err.Error(), "")
 			return
 		}
 	}
 	c.AjaxMsg(nil, m.NoError, "", "排序成功")
 }
-

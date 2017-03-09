@@ -1,27 +1,23 @@
 package routers
 
 import (
-	"github.com/astaxie/beego"
 	"YYCMS/controllers"
+	"YYCMS/utils/YYLog"
+
+	"github.com/astaxie/beego"
 )
 
-
 func init() {
-
-	beego.Debug("initCMSRoutes")
-
+	YYLog.Info("initYYCMSRoutes")
 	beego.AutoRouter(&controllers.AdminUserController{})
-	beego.Router("/adminlogin", &controllers.LoginController{})
+	beego.AutoRouter(&controllers.LoginController{})
 	beego.AutoRouter(&controllers.AuthCodeController{})
 	beego.AutoRouter(&controllers.AdminRoleController{})
 	beego.AutoRouter(&controllers.CategoryController{})
 	beego.AutoRouter(&controllers.ModelController{})
 	beego.AutoRouter(&controllers.CarouselController{})
-
 	beego.AutoRouter(&controllers.ImageController{})
-	beego.AutoRouter(&controllers.ImageController{})
-	beego.Debug("initCMSRoutes OK")
+	//ueditor
+	beego.Router("/ueditor", &controllers.UeditorController{}, "*:ControllerUE")
+	YYLog.Info("initYYCMSRoutes OK")
 }
-
-
-
